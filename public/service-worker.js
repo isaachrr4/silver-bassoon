@@ -17,22 +17,43 @@ const FILES_TO_CACHE = [
   "./icons/icon-384x384.png",
   "./icons/icon-512x512.png",
 ];
-self.addEventListener('fetch', function (e) {
-    console.log('fetch request : ' + e.request.url)
-    e.respondWith(
-      caches.match(e.request).then(function (request) {
-        if (request) { // if cache is available, respond with cache
-          console.log('responding with cache : ' + e.request.url)
-          return request
-        } else {       // if there are no cache, try fetching request
-          console.log('file is not cached, fetching : ' + e.request.url)
-          return fetch(e.request)
+self.addEventListener("fetch", function(event) {
+  // cache all get requests to /api routes
+  if (event.request.url.includes("/api/")) {
+    event.respondWith(
+      caches.open(DATA_CACHE_NAME).then(cache => {
+        return fetch(event.request)
+          .then(response => {
+            // If the response was good, clone it and store it in the cache.
+            if (response.status === 200) {
+              cache.put(event.request.url, response.clone());
+            }
+
+            return response;
+          })
+          .catch(err => {
+            // Network request failed, try to get it from the cache.
+            return cache.match(event.request);
+          });
+      }).catch(err => console.log(err))
+    );
+
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request).catch(function() {
+      return caches.match(event.request).then(function(response) {
+        if (response) {
+          return response;
+        } else if (event.request.headers.get("accept").includes("text/html")) {
+          // return the cached home page for all requests for html pages
+          return caches.match("/");
         }
-  
-      
-      })
-    )
-  })
+      });
+    })
+  );
+});
   
   // Cache resources
   self.addEventListener('install', function (e) {
